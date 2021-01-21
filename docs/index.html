@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>折れ線グラフの描画</title>
+</head>
+<body>
+    <canvas id="canvas" width="1000" height="750"></canvas>
+    <script>
+        const getMax = function (a, b) {return Math.max(a, b);}
+        const getMin = function (a, b) {return Math.min(a, b);}
+        const normalize = function (x, min, max) { return (x - min) / (max - min);}
+
+        var queryString = location.search;
+        queryString = decodeURIComponent(location.search.substring(1));
+        queries = queryString.split("&");
+        let graph = new Map();
+
+        let maxY = Number.MIN_SAFE_INTEGER;
+        let minY = Number.MAX_SAFE_INTEGER;
+        let maxLen = 0;
+        queries.forEach(q => {
+            var tmp = q.split("=");
+            var key = tmp[0];
+            var value = tmp[1];
+            var tmp = key.split('-');
+            var name = tmp[0];
+            var tag = tmp[1];
+            if (!graph[name]) {
+                graph[name] = new Object();
+            }
+            switch (tag) {
+                case 'color':
+                    graph[name].color = value;
+                    break;
+                case 'values':
+                    graph[name].values = value.split(',').map(Number);
+                    maxY = Math.max(maxY, graph[name].values.reduce(getMax));
+                    minY = Math.min(minY, graph[name].values.reduce(getMin));
+                    maxLen = Math.max(maxLen, graph[name].values.length);
+                    break;
+            }
+        })
+        console.log(`最小値: ${minY}, 最大値: ${maxY}, 最大要素数: ${maxLen}`);
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const FRAME_MARGIN_W = W * 0.01;
+        const FRAME_MARGIN_H = H * 0.01;
+        const GRAPH_MIN_X = FRAME_MARGIN_W * 4;
+        const GRAPH_MIN_Y = FRAME_MARGIN_H * 4;
+        const GRAPH_AREA_W = (W - GRAPH_MIN_X * 2);
+        const GRAPH_AREA_H = (H - GRAPH_MIN_Y * 2);
+
+        console.log('>> 枠線の描画を開始します。');
+        ctx.beginPath();
+        ctx.moveTo(FRAME_MARGIN_W, FRAME_MARGIN_H);
+        ctx.lineTo(FRAME_MARGIN_W, H);
+        ctx.lineTo(W, H);
+        ctx.lineTo(W, FRAME_MARGIN_H);
+        ctx.closePath();
+        ctx.stroke();
+
+        const INTERVAL = GRAPH_AREA_W / (Number.EPSILON + maxLen - 1);
+
+        console.log('>> 折れ線の描画を開始します。');
+        for (let name in graph) {
+            var x = GRAPH_MIN_X;
+            var y = graph[name].values[0];
+            var posY = GRAPH_MIN_Y + (1 - normalize(y, minY, maxY)) * GRAPH_AREA_H;
+            ctx.beginPath();
+            ctx.strokeStyle = graph[name].color;
+            ctx.lineWidth = 3;
+            ctx.moveTo(x, posY);
+            graph[name].values.slice(1).forEach(y => {
+                x += INTERVAL;
+                var posY = GRAPH_MIN_Y + (1 - normalize(y, minY, maxY)) * GRAPH_AREA_H;
+                ctx.lineTo(x, posY);
+            });
+            ctx.stroke();
+        }
+
+        console.log('>> 数値の描画を開始します。');
+        ctx.font = "10px serif";
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'top';
+        for (let name in graph) {
+            var x = GRAPH_MIN_X;
+            graph[name].values.forEach(y => {
+                var posY = GRAPH_MIN_Y + (1 - normalize(y, minY, maxY)) * GRAPH_AREA_H;
+                ctx.fillText(y, x, posY);
+                x += INTERVAL;
+            });
+        }
+
+        console.log('>> 凡例の描画を開始します。');
+        var legendPosY = GRAPH_MIN_Y;
+        for (let name in graph) {
+            ctx.font = "20px serif";
+            ctx.textAlign = 'start';
+            ctx.textBaseline = 'top';
+            var textArea = ctx.measureText(name);
+            // 背景
+            ctx.fillStyle = graph[name].color;
+            ctx.fillRect(FRAME_MARGIN_W * 3, legendPosY, textArea.width, 20);
+            // 枠線
+            ctx.strokeStyle = graph[name].color;
+            ctx.lineWidth = 8;
+            ctx.strokeRect(FRAME_MARGIN_W * 3, legendPosY, textArea.width, 20);
+            // 凡例名
+            ctx.fillStyle = 'Black';
+            ctx.fillText(name, FRAME_MARGIN_W * 3, legendPosY);
+            legendPosY += 35;
+        }
+    </script>
+
+</body></html>
